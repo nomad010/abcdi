@@ -1,0 +1,4 @@
+mypy
+coverage
+mutmut
+ruff
