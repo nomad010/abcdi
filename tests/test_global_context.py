@@ -1,6 +1,6 @@
 import unittest
 
-from abcdi import set_context, context, get_dependency, call, bind_dependencies, Context
+from abcdi import set_context, context, get_dependency, call, bind_dependencies, Context, injected, injectable
 import abcdi
 
 
@@ -56,3 +56,17 @@ class TestGlobalContext(unittest.TestCase):
             if item == 6 and a == 1 and b == 4:
                 return 2
         self.assertEqual(func2(6, b=4), 2)
+
+    def test_context_injected_works(self):
+        @injectable
+        def func1(item, *, a, b):
+            if item == 5 and a == 1 and b == 2:
+                return 1
+
+        test_context = Context(dependencies={
+            'a': (int, [2], {}),
+            'c': (int, [1], {}),
+        })
+        set_context(test_context)
+        self.assertEqual(context(), test_context)
+        self.assertEqual(func1(5, a=injected('c'), b=2), 1)

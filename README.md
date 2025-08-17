@@ -6,6 +6,7 @@ A simple, lightweight dependency injection library for Python based on construct
 
 - **Zero external dependencies** - Uses only Python standard library
 - **Parameter-based injection** - Automatically injects dependencies based on parameter names
+- **Explicit injection sentinels** - Use `injected()` for explicit, non-magical dependency injection
 - **Multiple contexts** - Support for isolated dependency scopes
 - **Lazy and eager loading** - Create dependencies when needed or upfront
 - **Global context management** - Set and retrieve contexts globally for easier usage
@@ -50,6 +51,7 @@ print(user_service.database.connection_string)  # sqlite:///app.db
 ### Dependencies Configuration
 
 Dependencies are defined as a dictionary where:
+
 - **Key**: Dependency name (string)
 - **Value**: Tuple of `(Class, args, kwargs)`
 
@@ -72,6 +74,28 @@ class ServiceB:
     def __init__(self, service_a: ServiceA, database: Database):
         self.service_a = service_a  # Gets the 'service_a' dependency
         self.database = database    # Gets the 'database' dependency
+```
+
+### Explicit Injection with Sentinels
+
+For more explicit control, use injection sentinels with default parameters:
+
+```python
+import abcdi
+
+# Using global context
+@abcdi.injectable
+def process_users(user_service, db=abcdi.injected('database')):
+    return user_service.get_all_users_from_db(db)
+
+# Using specific context
+@abcdi.injectable
+def process_orders(order_service):
+    return order_service.get_all_orders()
+
+# Call without arguments - dependencies auto-injected
+users = process_users(user_service=abcdi.injected(), db=abcdi.injected('database'))
+orders = process_orders(order_service=ctx.injected('order_service'))
 ```
 
 ## Usage Patterns
@@ -162,6 +186,8 @@ dependencies = {
 - `abcdi.get_dependency(name)` - Get a dependency from global context
 - `abcdi.call(callable_obj, *args, **kwargs)` - Call function with dependency injection
 - `abcdi.bind_dependencies(callable_obj)` - Return function with dependencies bound
+- `abcdi.injected(name)` - Create injection sentinel for explicit dependency injection
+- `abcdi.injectable(callable_obj)` - Decorator that processes injection sentinels in function calls
 
 ### Context Class
 
@@ -171,6 +197,7 @@ class Context:
     def get_dependency(self, name: str) -> Any
     def call(self, callable_obj, *args, **kwargs) -> Any
     def bind_dependencies(self, callable_obj) -> Callable
+    def injected(self, dependency_name: str | None = None) -> InjectedSentinel
 ```
 
 ## Examples
@@ -217,13 +244,46 @@ class TestUserService(unittest.TestCase):
             'database': (type(mock_db), [], {}),
             'user_service': (UserService, [], {}),
         }
-        
+
         ctx = abcdi.Context(test_dependencies)
         abcdi.set_context(ctx)
-    
+
     def test_user_creation(self):
         user_service = abcdi.get_dependency('user_service')
         # Test your service...
+```
+
+### Explicit Injection Example
+
+```python
+import abcdi
+
+# Setup dependencies
+dependencies = {
+    'database': (Database, [], {'connection_string': 'sqlite:///app.db'}),
+    'user_service': (UserService, [], {}),
+    'email_service': (EmailService, [], {}),
+}
+
+ctx = abcdi.Context(dependencies)
+abcdi.set_context(ctx)
+
+# Function using explicit injection sentinels
+@abcdi.injectable
+def send_welcome_email(
+    user_id: int,
+    user_svc=abcdi.injected('user_service'),  # Explicit dependency name
+    email_svc=abcdi.injected('email_service')  # Different param name than dependency
+):
+    user = user_svc.get_user(user_id)
+    return email_svc.send_welcome(user.email)
+
+# Call without providing dependencies - they're auto-injected
+result = send_welcome_email(user_id=123)
+
+# Can still override specific dependencies
+custom_email_service = CustomEmailService()
+result = send_welcome_email(user_id=123, email_svc=custom_email_service)
 ```
 
 ## Error Handling

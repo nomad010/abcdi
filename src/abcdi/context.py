@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any, Dict, Type
 import inspect
 from functools import wraps
@@ -16,6 +18,12 @@ def _get_callable_parameters(callable_obj) -> list[str]:
             return list(signature.parameters.keys())
     except Exception:
         raise
+
+
+class InjectedSentinel:
+    def __init__(self, context: Context, dependency_name: str | None = None):
+        self.context = context
+        self.dependency_name = dependency_name
 
 
 class Context:
@@ -59,6 +67,9 @@ class Context:
         if not self._lazy and self._dependency_config:
             for dep_name in self._dependency_config:
                 self.get_dependency(dep_name)
+
+    def injected(self, dependency_name: str | None = None) -> Any:
+        return InjectedSentinel(self, dependency_name=dependency_name)
 
     def get_dependency(self, name: str) -> Any:
         """
