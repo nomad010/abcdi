@@ -12,3 +12,7 @@ dynamic = ["version", "dependencies"]
 [tool.setuptools.dynamic]
 version = { file = "version" }
 dependencies = { file = ["requirements.txt"] }
+
+[tool.mutmut]
+paths_to_mutate = [ "src/abcdi" ]
+tests_dir = [ "tests/" ]

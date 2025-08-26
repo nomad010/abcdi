@@ -1,7 +1,7 @@
 import unittest
 import pathlib
 
-from abcdi import Context
+from abcdi import Context, factory, instance
 from abcdi.context import _get_callable_parameters
 
 
@@ -146,63 +146,63 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={}, **kwargs)
-                self.assertDictEqual(context._dependency_cache, {})
+                self.assertDictEqual(context.dependency_cache, {})
 
     def test_create_with_simple_type_default_constructor_1(self):
         for lazy in [True, False, None]:
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'test_int': (int, [], {})
+                    'test_int': factory(int)
                 }, **kwargs)
                 if lazy:
-                    self.assertDictEqual(context._dependency_cache, {})
+                    self.assertDictEqual(context.dependency_cache, {})
                 else:
-                    self.assertDictEqual(context._dependency_cache, {'test_int': 0})
+                    self.assertDictEqual(context.dependency_cache, {'test_int': 0})
                 self.assertEqual(context.get_dependency('test_int'), 0)
-                self.assertDictEqual(context._dependency_cache, {'test_int': 0})
+                self.assertDictEqual(context.dependency_cache, {'test_int': 0})
 
     def test_create_with_simple_type_default_constructor_2(self):
         for lazy in [True, False, None]:
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'test_str': (str, [], {})
+                    'test_str': factory(str)
                 }, **kwargs)
                 if lazy:
-                    self.assertDictEqual(context._dependency_cache, {})
+                    self.assertDictEqual(context.dependency_cache, {})
                 else:
-                    self.assertDictEqual(context._dependency_cache, {'test_str': ''})
+                    self.assertDictEqual(context.dependency_cache, {'test_str': ''})
                 self.assertEqual(context.get_dependency('test_str'), '')
-                self.assertDictEqual(context._dependency_cache, {'test_str': ''})
+                self.assertDictEqual(context.dependency_cache, {'test_str': ''})
 
     def test_create_with_simple_type_args_1(self):
         for lazy in [True, False, None]:
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'test_int': (int, [1], {})
+                    'test_int': factory(int, 1)
                 }, **kwargs)
                 if lazy:
-                    self.assertDictEqual(context._dependency_cache, {})
+                    self.assertDictEqual(context.dependency_cache, {})
                 else:
-                    self.assertDictEqual(context._dependency_cache, {'test_int': 1})
+                    self.assertDictEqual(context.dependency_cache, {'test_int': 1})
                 self.assertEqual(context.get_dependency('test_int'), 1)
-                self.assertDictEqual(context._dependency_cache, {'test_int': 1})
+                self.assertDictEqual(context.dependency_cache, {'test_int': 1})
 
     def test_create_with_simple_type_args_2(self):
         for lazy in [True, False, None]:
             kwargs = {} if lazy is None else {'lazy': lazy}
             with self.subTest(lazy=lazy):
                 context = Context(dependencies={
-                    'test_str': (str, [1], {})
+                    'test_str': factory(str, 1)
                 }, **kwargs)
                 if lazy:
-                    self.assertDictEqual(context._dependency_cache, {})
+                    self.assertDictEqual(context.dependency_cache, {})
                 else:
-                    self.assertDictEqual(context._dependency_cache, {'test_str': '1'})
+                    self.assertDictEqual(context.dependency_cache, {'test_str': '1'})
                 self.assertEqual(context.get_dependency('test_str'), '1')
-                self.assertDictEqual(context._dependency_cache, {'test_str': '1'})
+                self.assertDictEqual(context.dependency_cache, {'test_str': '1'})
 
     def test_create_with_simple_type_kwargs_1(self):
         class Kwargs:
@@ -216,14 +216,14 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'test_kwargs': (Kwargs, [], {'a': 1})
+                    'test_kwargs': factory(Kwargs, a=1)
                 }, **kwargs)
                 if lazy:
-                    self.assertDictEqual(context._dependency_cache, {})
+                    self.assertDictEqual(context.dependency_cache, {})
                 else:
-                    self.assertDictEqual(context._dependency_cache, {'test_kwargs': Kwargs(a=1)})
+                    self.assertDictEqual(context.dependency_cache, {'test_kwargs': Kwargs(a=1)})
                 self.assertEqual(context.get_dependency('test_kwargs'), Kwargs(a=1))
-                self.assertDictEqual(context._dependency_cache, {'test_kwargs': Kwargs(a=1)})
+                self.assertDictEqual(context.dependency_cache, {'test_kwargs': Kwargs(a=1)})
 
     def test_create_with_simple_type_args_and_kwargs_1(self):
         class ArgsAndKwargs:
@@ -238,24 +238,23 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'test_args': (ArgsAndKwargs, ['b'], {'a': 1})
+                    'test_args': factory(ArgsAndKwargs, 'b', a=1)
                 }, **kwargs)
                 if lazy:
-                    self.assertDictEqual(context._dependency_cache, {})
+                    self.assertDictEqual(context.dependency_cache, {})
                 else:
-                    self.assertDictEqual(context._dependency_cache, {'test_args': ArgsAndKwargs('b', a=1)})
+                    self.assertDictEqual(context.dependency_cache, {'test_args': ArgsAndKwargs('b', a=1)})
                 self.assertEqual(context.get_dependency('test_args'), ArgsAndKwargs('b', a=1))
-                self.assertDictEqual(context._dependency_cache, {'test_args': ArgsAndKwargs('b', a=1)})
+                self.assertDictEqual(context.dependency_cache, {'test_args': ArgsAndKwargs('b', a=1)})
 
     def test_create_incorrect_factory_type_1(self):
         for lazy in [True, False, None]:
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 with self.assertRaises(ValueError) as exception:
-                    Context(dependencies={'test_args': int}, **kwargs)
+                    Context(dependencies={'test_args': factory(5)}, **kwargs)
                 self.assertEqual(
-                    str(exception.exception),
-                    'Dependency test_args must be a Factory tuple (class, args, kwargs)'
+                    str(exception.exception), 'Factory class for test_args must be a type'
                 )
 
     def test_create_incorrect_factory_type_2(self):
@@ -263,10 +262,10 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 with self.assertRaises(ValueError) as exception:
-                    Context(dependencies={'test_args': (int, [])}, **kwargs)
+                    Context(dependencies={'test_args': 6}, **kwargs)
                 self.assertEqual(
                     str(exception.exception),
-                    'Dependency test_args must be a Factory tuple (class, args, kwargs)'
+                    'Dependency test_args must be a config dict from factory() or instance()'
                 )
 
     def test_create_incorrect_factory_type_3(self):
@@ -274,10 +273,10 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 with self.assertRaises(ValueError) as exception:
-                    Context(dependencies={'test_args': (int, [], {}, 'extra')}, **kwargs)
+                    Context(dependencies={'test_args': {}}, **kwargs)
                 self.assertEqual(
                     str(exception.exception),
-                    'Dependency test_args must be a Factory tuple (class, args, kwargs)'
+                    'Dependency test_args config dict must have \'type\' field'
                 )
 
     def test_create_incorrect_factory_type_4(self):
@@ -285,9 +284,12 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 with self.assertRaises(ValueError) as exception:
-                    Context(dependencies={'test_args': (5, [], {})}, **kwargs)
+                    Context(dependencies={'test_args': {
+                        'type': 'unknown'
+                    }}, **kwargs)
                 self.assertEqual(
-                    str(exception.exception), 'Class for test_args must be a type'
+                    str(exception.exception),
+                    'Unknown dependency type \'unknown\' for test_args'
                 )
 
     def test_create_incorrect_factory_type_5(self):
@@ -295,9 +297,12 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 with self.assertRaises(ValueError) as exception:
-                    Context(dependencies={'test_args': (int, 'args', {})}, **kwargs)
+                    Context(dependencies={'test_args': {
+                        'type': 'factory'
+                    }}, **kwargs)
                 self.assertEqual(
-                    str(exception.exception), 'Args for test_args must be a list'
+                    str(exception.exception),
+                    'Factory class for test_args must be a type'
                 )
 
     def test_create_incorrect_factory_type_6(self):
@@ -305,9 +310,67 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 with self.assertRaises(ValueError) as exception:
-                    Context(dependencies={'test_args': (int, [], 'kwargs')}, **kwargs)
+                    Context(dependencies={'test_args': {
+                        'type': 'factory',
+                        'class': 5
+                    }}, **kwargs)
                 self.assertEqual(
-                    str(exception.exception), 'Kwargs for test_args must be a dict'
+                    str(exception.exception), 'Factory class for test_args must be a type'
+                )
+
+    def test_create_incorrect_factory_type_7(self):
+        for lazy in [True, False, None]:
+            with self.subTest(lazy=lazy):
+                kwargs = {} if lazy is None else {'lazy': lazy}
+                with self.assertRaises(ValueError) as exception:
+                    Context(dependencies={'test_args': {
+                        'type': 'factory',
+                        'class': int,
+                        'args': 5
+                    }}, **kwargs)
+                self.assertEqual(
+                    str(exception.exception), 'Factory args for test_args must be a list'
+                )
+
+    def test_create_incorrect_factory_type_8(self):
+        for lazy in [True, False, None]:
+            with self.subTest(lazy=lazy):
+                kwargs = {} if lazy is None else {'lazy': lazy}
+                with self.assertRaises(ValueError) as exception:
+                    Context(dependencies={'test_args': {
+                        'type': 'factory',
+                        'class': int,
+                        'args': [6],
+                        'kwargs': 5
+                    }}, **kwargs)
+                self.assertEqual(
+                    str(exception.exception), 'Factory kwargs for test_args must be a dict'
+                )
+
+    def test_create_incorrect_factory_type_9(self):
+        for lazy in [True, False, None]:
+            with self.subTest(lazy=lazy):
+                kwargs = {} if lazy is None else {'lazy': lazy}
+                with self.assertRaises(ValueError) as exception:
+                    Context(dependencies={'test_args': {
+                        'type': 'instance',
+                    }}, **kwargs)
+                self.assertEqual(
+                    str(exception.exception), 'Instance config for test_args must have \'value\' field'
+                )
+    
+    def test_create_incorrect_factory_type_10(self):
+        for lazy in [True, False, None]:
+            with self.subTest(lazy=lazy):
+                kwargs = {} if lazy is None else {'lazy': lazy}
+                with self.assertRaises(ValueError) as exception:
+                    Context(dependencies={'test_args': {
+                        'type': 'factory',
+                        'class': int,
+                        'args': [5]
+                    }}, **kwargs)
+                self.assertEqual(
+                    str(exception.exception), 'Factory kwargs for test_args must be a dict'
                 )
 
     def test_missing_dependency_raises_key_error(self):
@@ -315,11 +378,14 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'test_found': (str, [], {})
+                    'test_found': factory(str)
                 }, **kwargs)
                 with self.assertRaises(KeyError) as exception:
                     context.get_dependency('test_missing')
-                self.assertEqual(str(exception.exception), "\"Dependency 'test_missing' is not registered\"")
+                self.assertEqual(
+                    str(exception.exception),
+                    "\"Dependency 'test_missing' is not registered in this context or parent contexts\""
+                )
 
     def test_call_for_empty_context_works(self):
         for lazy in [True, False, None]:
@@ -369,11 +435,11 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'a': (int, [1000], {}),
-                    'b': (int, [2000], {}),
-                    'c': (int, [3000], {}),
-                    'd': (int, [4000], {}),
-                    'e': (int, [5000], {}),
+                    'a': factory(int, 1000),
+                    'b': factory(int, 2000),
+                    'c': factory(int, 3000),
+                    'd': factory(int, 4000),
+                    'e': factory(int, 5000),
                 }, **kwargs)
 
                 def test_call(a=1, b=2, c=0, d=4, e=5):
@@ -386,11 +452,11 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'a': (int, [1000], {}),
-                    'b': (int, [2000], {}),
-                    'c': (int, [3000], {}),
-                    'd': (int, [4000], {}),
-                    'e': (int, [5000], {}),
+                    'a': factory(int, 1000),
+                    'b': factory(int, 2000),
+                    'c': factory(int, 3000),
+                    'd': factory(int, 4000),
+                    'e': factory(int, 5000),
                 }, **kwargs)
 
                 def test_call(a=1, b=2, c=0, d=4, e=5):
@@ -403,9 +469,9 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'first': (str, [1], {}),
-                    'second': (str, [2], {}),
-                    'third': (str, [3], {}),
+                    'first': factory(str, 1),
+                    'second': factory(str, 2),
+                    'third': factory(str, 3),
                 }, **kwargs)
 
                 def test_call(x, y, z, a=1, b=2, c=0, d=4, e=5):
@@ -418,7 +484,7 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'path': (pathlib.Path, ['file.txt'], {}),
+                    'path': factory(pathlib.Path, 'file.txt'),
                 }, **kwargs)
 
                 @context.bind_dependencies
@@ -432,7 +498,7 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'path': (pathlib.Path, ['file.txt'], {}),
+                    'path': factory(pathlib.Path, 'file.txt'),
                 }, **kwargs)
 
                 def test_call(path):
@@ -467,9 +533,9 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'a': (DepA, [], {}),
-                    'b': (DepB, [], {}),
-                    'c': (DepC, [], {'b': 5}),
+                    'a': factory(DepA),
+                    'b': factory(DepB),
+                    'c': factory(DepC, b=5),
                 }, **kwargs)
                 c = DepC(b=5)
                 b = DepB(c=c)
@@ -487,8 +553,8 @@ class TestContext(unittest.TestCase):
 
         with self.subTest(lazy=True):
             context = Context(dependencies={
-                'a': (DepA, [], {}),
-                'b': (DepB, [], {}),
+                'a': factory(DepA),
+                'b': factory(DepB),
             }, lazy=True)
             with self.assertRaises(ValueError) as exception:
                 context.get_dependency('a')
@@ -502,8 +568,8 @@ class TestContext(unittest.TestCase):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 with self.assertRaises(ValueError) as exception:
                     context = Context(dependencies={
-                        'a': (DepA, [], {}),
-                        'b': (DepB, [], {}),
+                        'a': factory(DepA),
+                        'b': factory(DepB),
                     }, **kwargs)
                 self.assertEqual(str(exception.exception), 'Circular dependency detected: a -> b -> a')
 
@@ -520,6 +586,242 @@ class TestContext(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'a': (DepA, [1, 2], {}),
+                    'a': factory(DepA, 1, 2),
                 }, **kwargs)
                 self.assertEqual(context.get_dependency('a'), DepA(1, 2))
+
+    def test_instance_dependency_works(self):
+        class DepA:
+            def __init__(self, *, b):
+                self.b = b
+
+            def __eq__(self, value):
+                return self.b == value.b
+
+        for lazy in [True, False, None]:
+            with self.subTest(lazy=lazy):
+                kwargs = {} if lazy is None else {'lazy': lazy}
+                context = Context(dependencies={
+                    'a': instance(DepA(b=5)),
+                }, **kwargs)
+                self.assertEqual(context.get_dependency('a'), DepA(b=5))
+                self.assertDictEqual(context.dependency_cache, {'a': DepA(b=5)})
+
+    def test_has_dependency_works(self):
+        class DepA:
+            def __init__(self, *, b):
+                self.b = b
+
+            def __eq__(self, value):
+                return self.b == value.b
+
+        for lazy in [True, False, None]:
+            with self.subTest(lazy=lazy):
+                kwargs = {} if lazy is None else {'lazy': lazy}
+                context = Context(dependencies={
+                    'existing': instance(DepA(b=5)),
+                }, **kwargs)
+                self.assertTrue(context.has_dependency('existing'))
+                self.assertFalse(context.has_dependency('notexisting'))
+
+    def test_subcontext_has_dependency_works(self):
+        class DepA:
+            def __init__(self, *, b):
+                self.b = b
+
+            def __eq__(self, value):
+                return self.b == value.b
+
+        for lazy in [True, False, None]:
+            kwargs = {} if lazy is None else {'lazy': lazy}
+            for sublazy in [True, False, None]:
+                subkwargs = {} if sublazy is None else {'lazy': sublazy}               
+                with self.subTest(lazy=lazy, sublazy=sublazy):
+                    context = Context(dependencies={
+                        'existing': instance(DepA(b=5)),
+                    }, **kwargs)
+                    subcontext = context.subcontext(dependencies={
+                        'onlysubcontext': instance(DepA(b=5)),
+                    }, **subkwargs)
+                    self.assertTrue(context.has_dependency('existing'))
+                    self.assertFalse(context.has_dependency('notexisting'))
+                    self.assertFalse(context.has_dependency('onlysubcontext'))
+                    self.assertTrue(subcontext.has_dependency('existing'))
+                    self.assertFalse(subcontext.has_dependency('notexisting'))
+                    self.assertTrue(subcontext.has_dependency('onlysubcontext'))
+
+    def test_subcontext_get_dependency_works(self):
+        class DepA:
+            def __init__(self, *, b):
+                self.b = b
+
+            def __eq__(self, value):
+                return self.b == value.b
+
+        for lazy in [True, False, None]:
+            kwargs = {} if lazy is None else {'lazy': lazy}
+            for sublazy in [True, False, None]:
+                subkwargs = {} if sublazy is None else {'lazy': sublazy}               
+                with self.subTest(lazy=lazy, sublazy=sublazy):
+                    context = Context(dependencies={
+                        'existing': instance(DepA(b=5)),
+                    }, **kwargs)
+                    subcontext = context.subcontext(dependencies={
+                        'onlysubcontext': instance(DepA(b=1)),
+                    }, **subkwargs)
+                    self.assertEqual(context.get_dependency('existing'), DepA(b=5)) 
+                    with self.assertRaises(KeyError) as exception:
+                        context.get_dependency('notexisting')
+                    self.assertEqual(
+                        str(exception.exception),
+                        "\"Dependency 'notexisting' is not registered in this context or parent contexts\""
+                    )
+                    with self.assertRaises(KeyError) as exception:
+                        context.get_dependency('onlysubcontext')
+                    self.assertEqual(
+                        str(exception.exception),
+                        "\"Dependency 'onlysubcontext' is not registered in this context or parent contexts\""
+                    )
+                    self.assertEqual(subcontext.get_dependency('existing'), DepA(b=5))
+                    with self.assertRaises(KeyError) as exception:
+                        subcontext.get_dependency('notexisting')
+                    self.assertEqual(
+                        str(exception.exception),
+                        "\"Dependency 'notexisting' is not registered in this context or parent contexts\""
+                    )
+                    self.assertEqual(subcontext.get_dependency('onlysubcontext'), DepA(b=1))
+
+    def test_subcontext_shadowing_works(self):
+        class DepA:
+            def __init__(self, *, b):
+                self.b = b
+
+            def __eq__(self, value):
+                return self.b == value.b
+
+        for lazy in [True, False, None]:
+            kwargs = {} if lazy is None else {'lazy': lazy}
+            for sublazy in [True, False, None]:
+                subkwargs = {} if sublazy is None else {'lazy': sublazy}               
+                with self.subTest(lazy=lazy, sublazy=sublazy):
+                    context = Context(dependencies={
+                        'existing': instance(DepA(b=5)),
+                    }, **kwargs)
+                    subcontext = context.subcontext(dependencies={
+                        'existing': instance(DepA(b=1)),
+                    }, **subkwargs)
+                    self.assertEqual(context.get_dependency('existing'), DepA(b=5))
+                    self.assertEqual(subcontext.get_dependency('existing'), DepA(b=1))
+
+
+    def test_subcontext_creation_upward_works(self):
+        class DepA:
+            def __init__(self, *, b):
+                self.b = b
+
+            def __eq__(self, value):
+                return self.b == value.b
+            
+        class DepB:
+            def __init__(self, *, existing):
+                self.existing = existing
+
+            def __eq__(self, value):
+                return self.existing == value.existing
+
+        for lazy in [True, False, None]:
+            kwargs = {} if lazy is None else {'lazy': lazy}
+            for sublazy in [True, False, None]:
+                subkwargs = {} if sublazy is None else {'lazy': sublazy}               
+                with self.subTest(lazy=lazy, sublazy=sublazy):
+                    context = Context(dependencies={
+                        'existing': factory(DepA, b=5),
+                    }, **kwargs)
+                    subcontext = context.subcontext(dependencies={
+                        'subthing': factory(DepB),
+                    }, **subkwargs)
+                    self.assertEqual(
+                        subcontext.get_dependency('subthing'),
+                        DepB(existing=DepA(b=5))
+                    )
+    
+    def test_subcontext_creation_downward_errors(self):
+        class DepA:
+            def __init__(self, *, subthing):
+                self.subthing = subthing
+
+            def __eq__(self, value):
+                return self.subthing == value.subthing
+            
+        class DepB:
+            def __init__(self, *, existing):
+                self.existing = existing
+
+            def __eq__(self, value):
+                return self.existing == value.existing
+
+        for sublazy in [True, False, None]:
+            subkwargs = {} if sublazy is None else {'lazy': sublazy}   
+            with self.subTest(sublazy=sublazy):
+                context = Context(dependencies={
+                    'existing': factory(DepA, b=5),
+                }, lazy=True)
+                context.subcontext(dependencies={
+                    'subthing': factory(DepB, existing=5),
+                }, **subkwargs)
+                with self.assertRaises(TypeError):
+                    context.get_dependency('existing')
+
+    def test_subcontext_context_manager(self):
+        class DepA:
+            def __init__(self, *, b):
+                self.b = b
+
+            def __eq__(self, value):
+                return self.b == value.b
+
+        for lazy in [True, False, None]:
+            kwargs = {} if lazy is None else {'lazy': lazy}
+            for sublazy in [True, False, None]:
+                subkwargs = {} if sublazy is None else {'lazy': sublazy}               
+                with self.subTest(lazy=lazy, sublazy=sublazy):
+                    context = Context(dependencies={
+                        'existing': instance(DepA(b=5)),
+                    }, **kwargs)
+                    subdependencies = {
+                        'onlysubcontext': instance(DepA(b=5)),
+                    }
+                    with context.subcontext(dependencies=subdependencies, **subkwargs) as subcontext:
+                        self.assertTrue(context.has_dependency('existing'))
+                        self.assertFalse(context.has_dependency('notexisting'))
+                        self.assertFalse(context.has_dependency('onlysubcontext'))
+                        self.assertTrue(subcontext.has_dependency('existing'))
+                        self.assertFalse(subcontext.has_dependency('notexisting'))
+                        self.assertTrue(subcontext.has_dependency('onlysubcontext'))
+
+    def test_context_laziness(self):
+        class DepA:
+            def __init__(self, *, b):
+                self.b = b
+
+            def __eq__(self, value):
+                return self.b == value.b
+
+        for lazy in [True, False, None]:
+            kwargs = {} if lazy is None else {'lazy': lazy}
+            for sublazy in [True, False, None]:
+                subkwargs = {} if sublazy is None else {'lazy': sublazy}               
+                with self.subTest(lazy=lazy, sublazy=sublazy):
+                    ctx = Context(dependencies={'existing': factory(DepA, b=5)}, **kwargs)
+                    if lazy is True:
+                        self.assertEqual(len(ctx.dependency_cache), 0)
+                    else:
+                        self.assertEqual(len(ctx.dependency_cache), 1)
+                    subdependencies = {
+                        'existing': factory(DepA, b=1),
+                    }
+                    with ctx.subcontext(dependencies=subdependencies, **subkwargs) as subctx:
+                        if sublazy is True:
+                            self.assertEqual(len(subctx.dependency_cache), 0)
+                        else:
+                            self.assertEqual(len(subctx.dependency_cache), 1)

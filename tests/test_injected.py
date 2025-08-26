@@ -1,6 +1,6 @@
 import unittest
 
-from abcdi import Context, injectable
+from abcdi import Context, injectable, factory
 
 
 class TestInjected(unittest.TestCase):
@@ -73,9 +73,9 @@ class TestInjected(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'a': (int, [], {}),
-                    'b': (int, [1], {}),
-                    'c': (int, [2], {}),
+                    'a': factory(int),
+                    'b': factory(int, 1),
+                    'c': factory(int, 2),
                 }, **kwargs)
 
                 self.assertTrue(dummy_function(context.injected('a'), b=context.injected()))
@@ -96,10 +96,10 @@ class TestInjected(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'a': (int, [], {}),
-                    'b': (int, [1], {}),
-                    'c': (int, [2], {}),
-                    'self': (str, [], {})
+                    'a': factory(int),
+                    'b': factory(int, 1),
+                    'c': factory(int, 2),
+                    'self': factory(str)
                 }, **kwargs)
 
                 self.assertTrue(Dummy().dummy_method(context.injected('a'), b=context.injected()))
@@ -117,7 +117,7 @@ class TestInjected(unittest.TestCase):
             with self.subTest(lazy=lazy):
                 kwargs = {} if lazy is None else {'lazy': lazy}
                 context = Context(dependencies={
-                    'a': (int, [], {}),
+                    'a': factory(int),
                 }, **kwargs)
 
                 with self.assertRaises(RuntimeError) as exception:

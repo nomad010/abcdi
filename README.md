@@ -31,15 +31,14 @@ class UserService:
     def __init__(self, database: Database):  # Note: parameter name matches dependency name
         self.database = database
 
-# Create dependencies configuration
+# Create dependencies configuration using new factory() and instance() functions
 dependencies = {
-    'database': (Database, [], {'connection_string': 'sqlite:///app.db'}),
-    'user_service': (UserService, [], {}),  # Will auto-inject 'database'
+    'database': abcdi.factory(Database, connection_string='sqlite:///app.db'),
+    'user_service': abcdi.factory(UserService),  # Will auto-inject 'database'
 }
 
-# Create and set global context
-ctx = abcdi.Context(dependencies)
-abcdi.set_context(ctx)
+# Set global context
+abcdi.set_context(dependencies)
 
 # Get dependencies
 user_service = abcdi.get_dependency('user_service')
@@ -50,16 +49,20 @@ print(user_service.database.connection_string)  # sqlite:///app.db
 
 ### Dependencies Configuration
 
-Dependencies are defined as a dictionary where:
-
-- **Key**: Dependency name (string)
-- **Value**: Tuple of `(Class, args, kwargs)`
+Dependencies are defined as a dictionary using `factory()` and `instance()` helper functions:
 
 ```python
+import abcdi
+
 dependencies = {
-    'dependency_name': (MyClass, [positional_args], {'keyword': 'args'}),
+    'my_service': abcdi.factory(MyService, arg1, arg2, keyword='value'),
+    'config': abcdi.instance(existing_config_object),
+    'database': abcdi.factory(Database, url='sqlite:///app.db')
 }
 ```
+
+- **`factory(Class, \*args, **kwargs)`\*\*: Creates instances of the class with dependency injection
+- **`instance(obj)`**: Uses an existing object as a dependency
 
 ### Automatic Injection
 
@@ -108,8 +111,7 @@ Set a global context once and use convenience functions:
 import abcdi
 
 # Setup
-ctx = abcdi.Context(dependencies)
-abcdi.set_context(ctx)
+abcdi.set_context(dependencies)
 
 # Usage anywhere in your code
 db = abcdi.get_dependency('database')
@@ -121,12 +123,45 @@ result = abcdi.call(some_function)  # Auto-injects dependencies
 Use contexts directly for more control:
 
 ```python
-ctx = Context(dependencies)
+ctx = abcdi.Context(dependencies)
 db = ctx.get_dependency('database')
 result = ctx.call(some_function)
+
+# Context manager support
+with abcdi.Context(dependencies) as ctx:
+    service = ctx.get_dependency('my_service')
+# Context persists after exiting the with block
 ```
 
-### 3. Function Decoration
+### 3. Sub-contexts
+
+Create child contexts that inherit and override dependencies:
+
+```python
+# Parent context
+parent_deps = {
+    'database': abcdi.factory(Database, url='sqlite:///app.db'),
+    'logger': abcdi.factory(Logger, level='INFO')
+}
+abcdi.set_context(parent_deps)
+
+# Child context with temporary overrides
+child_deps = {
+    'user_service': abcdi.factory(UserService),  # Inherits database from parent
+    'logger': abcdi.factory(Logger, level='DEBUG')  # Override parent's logger
+}
+
+# Method 1: Direct subcontext
+with abcdi.Context(parent_deps).subcontext(child_deps) as child_ctx:
+    service = child_ctx.get_dependency('user_service')
+
+# Method 2: Global subcontext (temporarily changes global context)
+with abcdi.subcontext(child_deps) as child_ctx:
+    service = abcdi.get_dependency('user_service')  # Uses global context
+# Original global context is restored here
+```
+
+### 4. Function Decoration
 
 Bind dependencies to functions:
 
@@ -135,13 +170,8 @@ Bind dependencies to functions:
 def process_users(user_service: UserService):
     return user_service.get_all_users()
 
-@ctx.bind_dependencies
-def process_orders(order_service: OrderService):
-    return order_service.get_all_orders()
-
 # Call without arguments - dependencies auto-injected
 users = process_users()
-orders = process_orders()
 ```
 
 ## Advanced Features
@@ -181,23 +211,30 @@ dependencies = {
 
 ### Global Functions
 
-- `abcdi.set_context(ctx)` - Set the global DI context
+- `abcdi.set_context(dependencies, lazy=False)` - Set the global DI context with dependencies dict
 - `abcdi.context()` - Get the current global DI context
 - `abcdi.get_dependency(name)` - Get a dependency from global context
 - `abcdi.call(callable_obj, *args, **kwargs)` - Call function with dependency injection
 - `abcdi.bind_dependencies(callable_obj)` - Return function with dependencies bound
+- `abcdi.subcontext(dependencies, lazy=False)` - Create temporary global subcontext (context manager)
 - `abcdi.injected(name)` - Create injection sentinel for explicit dependency injection
 - `abcdi.injectable(callable_obj)` - Decorator that processes injection sentinels in function calls
+- `abcdi.factory(Class, *args, **kwargs)` - Create factory configuration for dependency injection
+- `abcdi.instance(obj)` - Create instance configuration for existing objects
 
 ### Context Class
 
 ```python
 class Context:
-    def __init__(self, dependencies: Dict[str, Tuple[Type, List[Any], Dict[str, Any]]], lazy: bool = False)
+    def __init__(self, dependencies: dict[str, dict[str, Any]], lazy: bool = False, parent: Context | None = None)
     def get_dependency(self, name: str) -> Any
     def call(self, callable_obj, *args, **kwargs) -> Any
     def bind_dependencies(self, callable_obj) -> Callable
+    def has_dependency(self, name: str) -> bool
+    def subcontext(self, dependencies: dict[str, dict[str, Any]], lazy: bool = False) -> Context
     def injected(self, dependency_name: str | None = None) -> InjectedSentinel
+    def __enter__(self) -> Context  # Context manager support
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None
 ```
 
 ## Examples
@@ -211,15 +248,14 @@ from myapp.services import UserService, OrderService
 from myapp.repositories import UserRepository, OrderRepository
 
 dependencies = {
-    'database': (Database, [], {'url': 'postgresql://localhost/myapp'}),
-    'user_repository': (UserRepository, [], {}),
-    'order_repository': (OrderRepository, [], {}),
-    'user_service': (UserService, [], {}),
-    'order_service': (OrderService, [], {}),
+    'database': abcdi.factory(Database, url='postgresql://localhost/myapp'),
+    'user_repository': abcdi.factory(UserRepository),
+    'order_repository': abcdi.factory(OrderRepository),
+    'user_service': abcdi.factory(UserService),
+    'order_service': abcdi.factory(OrderService),
 }
 
-ctx = abcdi.Context(dependencies)
-abcdi.set_context(ctx)
+abcdi.set_context(dependencies)
 
 # Now your controllers can use dependency injection
 def get_user_orders(user_id: int, order_service: OrderService):
@@ -241,12 +277,11 @@ class TestUserService(unittest.TestCase):
         # Create test dependencies with mocks
         mock_db = Mock()
         test_dependencies = {
-            'database': (type(mock_db), [], {}),
-            'user_service': (UserService, [], {}),
+            'database': abcdi.instance(mock_db),
+            'user_service': abcdi.factory(UserService),
         }
 
-        ctx = abcdi.Context(test_dependencies)
-        abcdi.set_context(ctx)
+        abcdi.set_context(test_dependencies)
 
     def test_user_creation(self):
         user_service = abcdi.get_dependency('user_service')
@@ -260,13 +295,12 @@ import abcdi
 
 # Setup dependencies
 dependencies = {
-    'database': (Database, [], {'connection_string': 'sqlite:///app.db'}),
-    'user_service': (UserService, [], {}),
-    'email_service': (EmailService, [], {}),
+    'database': abcdi.factory(Database, connection_string='sqlite:///app.db'),
+    'user_service': abcdi.factory(UserService),
+    'email_service': abcdi.factory(EmailService),
 }
 
-ctx = abcdi.Context(dependencies)
-abcdi.set_context(ctx)
+abcdi.set_context(dependencies)
 
 # Function using explicit injection sentinels
 @abcdi.injectable

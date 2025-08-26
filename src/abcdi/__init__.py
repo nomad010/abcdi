@@ -4,6 +4,7 @@ abcDI - Dependency Injection Library
 A simple dependency injection library based on constructor parameter name matching.
 Supports multiple isolated contexts for different usage scenarios.
 """
+from typing import Any
 from functools import wraps
 
 from .context import Context, InjectedSentinel
@@ -12,13 +13,13 @@ from .context import Context, InjectedSentinel
 _current_context: Context | None = None
 
 
-def set_context(ctx: Context) -> None:
+def set_context(dependencies: dict[str, dict[str, Any]], lazy: bool = False) -> None:
     """Set the current global DI context."""
     global _current_context
     if _current_context is not None:
         raise RuntimeError("DI context is already set for the application.")
 
-    _current_context = ctx
+    _current_context = Context(dependencies=dependencies, lazy=lazy)
 
 
 def context() -> Context:
@@ -72,3 +73,61 @@ def injectable(callable_object):
         return callable_object(*new_args, **new_kwargs)
 
     return new_func
+
+
+class _SubcontextManager:
+    """Context manager that temporarily sets a subcontext as the global context."""
+    
+    def __init__(self, subcontext_instance: Context, original_context: Context):
+        self.subcontext = subcontext_instance
+        self.original_context = original_context
+    
+    def __enter__(self) -> Context:
+        global _current_context
+        _current_context = self.subcontext
+        return self.subcontext
+    
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        global _current_context
+        _current_context = self.original_context
+        return None
+
+
+def subcontext(dependencies: dict[str, dict[str, Any]], lazy: bool = False) -> _SubcontextManager:
+    """
+    Create a subcontext from the current global context that temporarily becomes the global context.
+    
+    Args:
+        dependencies: Dictionary of dependency name to config dicts from factory() or instance() functions
+        lazy: If True, only create dependencies as needed. If False, create all dependencies upfront.
+    
+    Returns:
+        Context manager that temporarily sets the subcontext as global context
+    
+    Usage:
+        with subcontext(child_deps) as ctx:
+            # ctx is now the global context
+            service = get_dependency('service')
+        # Original context is restored here
+    """
+    current = context()  # Get current global context
+    new_subcontext = current.subcontext(dependencies, lazy=lazy)
+    return _SubcontextManager(new_subcontext, current)
+
+
+def factory(cls: type, *args, **kwargs) -> dict[str, Any]:
+    """Create a configuration dictionary for a class with optional args and kwargs."""
+    return {
+        'type': 'factory',
+        'class': cls,
+        'args': list(args),
+        'kwargs': kwargs
+    }
+
+
+def instance(obj: Any) -> dict[str, Any]:
+    """Create a configuration dictionary for a pre-created object."""
+    return {
+        'type': 'instance',
+        'value': obj
+    }

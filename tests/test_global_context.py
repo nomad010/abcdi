@@ -1,6 +1,6 @@
 import unittest
 
-from abcdi import set_context, context, get_dependency, call, bind_dependencies, Context, injected, injectable
+from abcdi import set_context, context, subcontext, get_dependency, call, bind_dependencies, injected, injectable, factory, instance
 import abcdi
 
 
@@ -31,9 +31,9 @@ class TestGlobalContext(unittest.TestCase):
         )
 
     def test_context_set_twice_errors(self):
-        set_context(Context(dependencies={}))
+        set_context(dependencies={})
         with self.assertRaises(RuntimeError) as exception:
-            set_context(Context(dependencies={}))
+            set_context(dependencies={})
         self.assertEqual(
             str(exception.exception), 'DI context is already set for the application.'
         )
@@ -43,11 +43,9 @@ class TestGlobalContext(unittest.TestCase):
             if item == 5 and a == 1 and b == 2:
                 return 1
 
-        test_context = Context(dependencies={
-            'a': (int, [1], {})
+        set_context(dependencies={
+            'a': factory(int, 1)
         })
-        set_context(test_context)
-        self.assertEqual(context(), test_context)
         self.assertEqual(get_dependency('a'), 1)
         self.assertEqual(call(func1, 5, b=2), 1)
 
@@ -63,10 +61,64 @@ class TestGlobalContext(unittest.TestCase):
             if item == 5 and a == 1 and b == 2:
                 return 1
 
-        test_context = Context(dependencies={
-            'a': (int, [2], {}),
-            'c': (int, [1], {}),
+        set_context(dependencies={
+            'a': factory(int, 2),
+            'c': factory(int, 1),
         })
-        set_context(test_context)
-        self.assertEqual(context(), test_context)
         self.assertEqual(func1(5, a=injected('c'), b=2), 1)
+
+    def test_subcontext(self):
+        class DepA:
+            def __init__(self, *, b):
+                self.b = b
+
+            def __eq__(self, value):
+                return self.b == value.b
+
+        for lazy in [True, False, None]:
+            kwargs = {} if lazy is None else {'lazy': lazy}
+            for sublazy in [True, False, None]:
+                subkwargs = {} if sublazy is None else {'lazy': sublazy}               
+                with self.subTest(lazy=lazy, sublazy=sublazy):
+                    try:
+                        set_context(dependencies={'existing': instance(DepA(b=5))}, **kwargs)
+                        subdependencies = {
+                            'existing': instance(DepA(b=1)),
+                        }
+                        self.assertEqual(context().get_dependency('existing'), DepA(b=5))
+                        with subcontext(dependencies=subdependencies, **subkwargs) as subctx:
+                            self.assertEqual(context().get_dependency('existing'), DepA(b=1))
+                            self.assertEqual(subctx.get_dependency('existing'), DepA(b=1))
+                        self.assertEqual(context().get_dependency('existing'), DepA(b=5))
+                    finally:
+                        self.tearDown()
+
+    def test_context_laziness(self):
+        class DepA:
+            def __init__(self, *, b):
+                self.b = b
+
+            def __eq__(self, value):
+                return self.b == value.b
+
+        for lazy in [True, False, None]:
+            kwargs = {} if lazy is None else {'lazy': lazy}
+            for sublazy in [True, False, None]:
+                subkwargs = {} if sublazy is None else {'lazy': sublazy}               
+                with self.subTest(lazy=lazy, sublazy=sublazy):
+                    try:
+                        set_context(dependencies={'existing': factory(DepA, b=5)}, **kwargs)
+                        if lazy is True:
+                            self.assertEqual(len(context().dependency_cache), 0)
+                        else:
+                            self.assertEqual(len(context().dependency_cache), 1)
+                        subdependencies = {
+                            'existing': factory(DepA, b=1),
+                        }
+                        with subcontext(dependencies=subdependencies, **subkwargs) as subctx:
+                            if sublazy is True:
+                                self.assertEqual(len(subctx.dependency_cache), 0)
+                            else:
+                                self.assertEqual(len(subctx.dependency_cache), 1)
+                    finally:
+                        self.tearDown()
