@@ -104,7 +104,7 @@ class TestGlobalContext(unittest.TestCase):
         for lazy in [True, False, None]:
             kwargs = {} if lazy is None else {'lazy': lazy}
             for sublazy in [True, False, None]:
-                subkwargs = {} if sublazy is None else {'lazy': sublazy}               
+                subkwargs = {} if sublazy is None else {'lazy': sublazy}
                 with self.subTest(lazy=lazy, sublazy=sublazy):
                     try:
                         set_context(dependencies={'existing': factory(DepA, b=5)}, **kwargs)
@@ -122,3 +122,40 @@ class TestGlobalContext(unittest.TestCase):
                                 self.assertEqual(len(subctx.dependency_cache), 1)
                     finally:
                         self.tearDown()
+
+    def test_injected_no_context(self):
+        @injectable
+        def fn(b = injected()):
+            return b == 5
+        
+        with self.assertRaises(RuntimeError) as exception:
+            self.assertTrue(fn())
+        self.assertEqual(str(exception.exception), 'No DI context is currently set. Use set_context() first.')
+    
+    def test_injected_no_context_with_later_context(self):
+        @injectable
+        def fn(b = injected()):
+            return b == 5
+        for lazy in [True, False, None]:
+            kwargs = {} if lazy is None else {'lazy': lazy}
+            with self.subTest(lazy=lazy):
+                set_context(dependencies={'b': instance(5)}, **kwargs)
+
+                self.assertTrue(fn())
+                self.tearDown()
+
+    def test_injected_no_context_with_later_context_and_separate_context(self):
+        for lazy in [True, False, None]:
+            kwargs = {} if lazy is None else {'lazy': lazy}
+            for sublazy in [True, False, None]:
+                subkwargs = {} if sublazy is None else {'lazy': sublazy}
+                with self.subTest(lazy=lazy, sublazy=sublazy):
+                    set_context(dependencies={'b': instance(5)}, **kwargs)
+                    ctx = abcdi.Context(dependencies={'c': instance(10)}, **subkwargs)
+
+                    @injectable
+                    def fn(b=injected(), c=ctx.injected()):
+                        return b == 5 and c == 10
+
+                    self.assertTrue(fn())
+                    self.tearDown()
