@@ -18,7 +18,7 @@ def _get_callable_parameters(callable_obj) -> list[str]:
 
 
 class InjectedSentinel:
-    def __init__(self, context: Context, dependency_name: str | None = None):
+    def __init__(self, context: Context | None = None, dependency_name: str | None = None):
         self.context = context
         self.dependency_name = dependency_name
 
@@ -135,6 +135,7 @@ class Context:
 
         creating.append(name)
 
+        # instance dependencies are already cached so we know it's a factory
         kls = self.dependency_config[name]['class']
         args = self.dependency_config[name]['args']
         kwargs = self.dependency_config[name]['kwargs']

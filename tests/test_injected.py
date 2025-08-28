@@ -1,7 +1,7 @@
 import unittest
 
-from abcdi import Context, injectable, factory
-
+from abcdi import Context, injectable, factory, injected, instance, set_context
+import abcdi
 
 class TestInjected(unittest.TestCase):
     def test_empty_context_empty_function_succeeds(self):
@@ -133,3 +133,24 @@ class TestInjected(unittest.TestCase):
                     str(exception.exception),
                     'Positional arguments require the dependency name to be passed to inject()'
                 )
+
+    def test_global_context_injection_works(self):
+        @injectable
+        def dummy_function(*args, a=0, k=5, **kwargs):
+            return a + sum(args) + k + sum(kwargs.values())
+
+        for lazy in [True, False, None]:
+            with self.subTest(lazy=lazy):
+                try:
+                    kwargs = {} if lazy is None else {'lazy': lazy}
+                    a_value = 10
+                    b_value = 100
+                    set_context(dependencies={
+                        'a': instance(a_value),
+                        'b': instance(b_value),
+                    }, **kwargs)
+                    
+                    self.assertEqual(dummy_function(a=abcdi.injected()), 15)
+                    self.assertEqual(dummy_function(a=abcdi.injected('b')), 105)
+                finally:
+                    abcdi._current_context = None

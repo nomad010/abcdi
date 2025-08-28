@@ -44,13 +44,8 @@ def bind_dependencies(callable_obj):
     return context().bind_dependencies(callable_obj)
 
 
-class GlobalInjectedSentinel:
-    def __init__(self, dependency_name: str | None = None):
-        self.dependency_name = dependency_name
-
-
-def injected(dependency_name: str | None = None):
-    return GlobalInjectedSentinel(dependency_name=dependency_name)
+def injected(dependency_name: str | None = None) -> Any:
+    return InjectedSentinel(dependency_name=dependency_name)
 
 
 def injectable(callable_object):
@@ -61,12 +56,14 @@ def injectable(callable_object):
         
         new_args = []
         for arg in args:
-            if type(arg) in (InjectedSentinel, GlobalInjectedSentinel):
+            if type(arg) is InjectedSentinel:
                 if arg.dependency_name is None:
                     raise RuntimeError(
                         'Positional arguments require the dependency name to be passed to inject()'
                     )
-                new_args.append(arg.context.get_dependency(arg.dependency_name))
+
+                ctx = arg.context if arg.context is not None else context() 
+                new_args.append(ctx.get_dependency(arg.dependency_name))
             else:
                 new_args.append(arg)
 
@@ -77,20 +74,21 @@ def injectable(callable_object):
             if param_name not in new_kwargs and param.default != inspect.Parameter.empty:
                 default_value = param.default
                 if type(default_value) is InjectedSentinel:
+                    if default_value.context is None:
+                        ctx = context()
+                    else:
+                        ctx = default_value.context
                     dependency_name = default_value.dependency_name or param_name
-                    new_kwargs[param_name] = default_value.context.get_dependency(dependency_name)
-                elif type(default_value) is GlobalInjectedSentinel:
-                    dependency_name = default_value.dependency_name or param_name
-                    new_kwargs[param_name] = context().get_dependency(dependency_name)
+                    new_kwargs[param_name] = ctx.get_dependency(dependency_name)
 
         for kwarg_name, kwarg_value in kwargs.items():
             if type(kwarg_value) is InjectedSentinel:
+                if kwarg_value.context is None:
+                    ctx = context()
+                else:
+                    ctx = kwarg_value.context
                 dependency_name = kwarg_value.dependency_name or kwarg_name
-                new_kwarg_value = kwarg_value.context.get_dependency(dependency_name)
-                new_kwargs[kwarg_name] = new_kwarg_value
-            elif type(kwarg_value) is GlobalInjectedSentinel:
-                dependency_name = kwarg_value.dependency_name or kwarg_name
-                new_kwarg_value = context().get_dependency(dependency_name)
+                new_kwarg_value = ctx.get_dependency(dependency_name)
                 new_kwargs[kwarg_name] = new_kwarg_value
             else:
                 new_kwargs[kwarg_name] = kwarg_value
