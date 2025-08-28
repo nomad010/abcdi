@@ -744,6 +744,39 @@ class TestContext(unittest.TestCase):
                         subcontext.get_dependency('subthing'),
                         DepB(existing=DepA(b=5))
                     )
+
+    def test_subcontext_creation_upward_hidden_errors(self):
+        class DepA:
+            def __init__(self, *, b):
+                self.b = b
+
+            def __eq__(self, value):
+                return self.b == value.b
+            
+        class DepB:
+            def __init__(self, *, existing):
+                self.existing = existing
+
+            def __eq__(self, value):
+                return self.existing == value.existing
+
+        for lazy in [True, False, None]:
+            kwargs = {} if lazy is None else {'lazy': lazy}
+            for sublazy in [False, None]:
+                subkwargs = {} if sublazy is None else {'lazy': sublazy}               
+                with self.subTest(lazy=lazy, sublazy=sublazy):
+                    context = Context(dependencies={
+                        'existing': factory(DepA, b=5),
+                    }, **kwargs)
+                    with self.assertRaises(TypeError) as exception:
+                        context.subcontext(dependencies={
+                            'subthing': factory(DepB),
+                        }, hidden_dependencies={'existing'}, **subkwargs)
+                    self.assertTrue(
+                        str(exception.exception).endswith(
+                            "DepB.__init__() missing 1 required keyword-only argument: 'existing'"
+                        )
+                    )
     
     def test_subcontext_creation_downward_errors(self):
         class DepA:
@@ -825,3 +858,50 @@ class TestContext(unittest.TestCase):
                             self.assertEqual(len(subctx.dependency_cache), 0)
                         else:
                             self.assertEqual(len(subctx.dependency_cache), 1)
+
+    def test_context_hidden_dependencies(self):
+        class DepA:
+            def __init__(self, *, b):
+                self.b = b
+
+            def __eq__(self, value):
+                return self.b == value.b
+
+        for lazy in [True, False, None]:
+            kwargs = {} if lazy is None else {'lazy': lazy}
+            for sublazy in [True, False, None]:
+                subkwargs = {} if sublazy is None else {'lazy': sublazy}               
+                with self.subTest(lazy=lazy, sublazy=sublazy):
+                    context = Context(dependencies={
+                        'existing': instance(DepA(b=5)),
+                    }, **kwargs)
+                    subcontext = context.subcontext(dependencies={
+                        'onlysubcontext': instance(DepA(b=1)),
+                    }, hidden_dependencies={'existing'}, **subkwargs)
+
+                    self.assertEqual(context.get_dependency('existing'), DepA(b=5))
+                    with self.assertRaises(KeyError) as exception:
+                        context.get_dependency('notexisting')
+                    self.assertEqual(
+                        str(exception.exception),
+                        "\"Dependency 'notexisting' is not registered in this context or parent contexts\""
+                    )
+                    with self.assertRaises(KeyError) as exception:
+                        context.get_dependency('onlysubcontext')
+                    self.assertEqual(
+                        str(exception.exception),
+                        "\"Dependency 'onlysubcontext' is not registered in this context or parent contexts\""
+                    )
+                    with self.assertRaises(KeyError) as exception:
+                        subcontext.get_dependency('existing')
+                    self.assertEqual(
+                        str(exception.exception),
+                        "\"Dependency 'existing' is not registered in this context or parent contexts\""
+                    )
+                    with self.assertRaises(KeyError) as exception: 
+                        subcontext.get_dependency('notexisting')
+                    self.assertEqual(
+                        str(exception.exception),
+                        "\"Dependency 'notexisting' is not registered in this context or parent contexts\""
+                    )
+                    self.assertEqual(subcontext.get_dependency('onlysubcontext'), DepA(b=1))

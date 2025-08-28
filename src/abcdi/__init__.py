@@ -119,7 +119,9 @@ class _SubcontextManager:
         return None
 
 
-def subcontext(dependencies: dict[str, dict[str, Any]], lazy: bool = False) -> _SubcontextManager:
+def subcontext(
+        dependencies: dict[str, dict[str, Any]], lazy: bool = False, hidden_dependencies: set[str] | None = None
+) -> _SubcontextManager:
     """
     Create a subcontext from the current global context that temporarily becomes the global context.
     
@@ -137,7 +139,7 @@ def subcontext(dependencies: dict[str, dict[str, Any]], lazy: bool = False) -> _
         # Original context is restored here
     """
     current = context()  # Get current global context
-    new_subcontext = current.subcontext(dependencies, lazy=lazy)
+    new_subcontext = current.subcontext(dependencies, lazy=lazy, hidden_dependencies=hidden_dependencies)
     return _SubcontextManager(new_subcontext, current)
 
 

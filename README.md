@@ -86,19 +86,22 @@ For more explicit control, use injection sentinels with default parameters:
 ```python
 import abcdi
 
-# Using global context
+# Using global context with default parameter injection
 @abcdi.injectable
-def process_users(user_service, db=abcdi.injected('database')):
-    return user_service.get_all_users_from_db(db)
+def process_users(data: str, user_service=abcdi.injected('user_service'), db=abcdi.injected('database')):
+    return user_service.process_data(data, db)
 
 # Using specific context
-@abcdi.injectable
-def process_orders(order_service):
+@abcdi.injectable  
+def process_orders(order_service=abcdi.injected()):
     return order_service.get_all_orders()
 
-# Call without arguments - dependencies auto-injected
-users = process_users(user_service=abcdi.injected(), db=abcdi.injected('database'))
-orders = process_orders(order_service=ctx.injected('order_service'))
+# Call without providing dependencies - they're auto-injected from default values
+users = process_users("user_data")  # user_service and db injected automatically
+orders = process_orders()  # order_service injected from parameter name
+
+# Can still override specific dependencies
+users = process_users("user_data", user_service=custom_service)
 ```
 
 ## Usage Patterns
@@ -159,6 +162,12 @@ with abcdi.Context(parent_deps).subcontext(child_deps) as child_ctx:
 with abcdi.subcontext(child_deps) as child_ctx:
     service = abcdi.get_dependency('user_service')  # Uses global context
 # Original global context is restored here
+
+# Method 3: Hidden dependencies (prevent inheritance of specific dependencies)
+hidden_deps = {'logger'}  # Don't inherit logger from parent
+with abcdi.subcontext(child_deps, hidden_dependencies=hidden_deps) as child_ctx:
+    # This context won't see parent's logger, only its own
+    service = child_ctx.get_dependency('user_service')
 ```
 
 ### 4. Function Decoration
@@ -180,10 +189,33 @@ users = process_users()
 
 ```python
 # Eager loading (default) - creates all dependencies immediately
-ctx = Context(dependencies, lazy=False)
+ctx = abcdi.Context(dependencies, lazy=False)
 
 # Lazy loading - creates dependencies only when requested for the first time.
-ctx = Context(dependencies, lazy=True)
+ctx = abcdi.Context(dependencies, lazy=True)
+```
+
+### Hidden Dependencies
+
+Prevent child contexts from inheriting specific dependencies from parent contexts:
+
+```python
+parent_deps = {
+    'database': abcdi.factory(Database, url='prod://db'),
+    'logger': abcdi.factory(Logger, level='ERROR')
+}
+abcdi.set_context(parent_deps)
+
+# Child context that blocks inheritance of certain dependencies
+child_deps = {
+    'database': abcdi.factory(Database, url='test://db'),  # Override parent
+}
+
+# Hide 'logger' - child won't inherit it from parent
+hidden_deps = {'logger'}
+with abcdi.subcontext(child_deps, hidden_dependencies=hidden_deps) as ctx:
+    db = ctx.get_dependency('database')  # Gets test database
+    # ctx.get_dependency('logger')  # Would raise KeyError - hidden from parent
 ```
 
 ### Explicit Parameter Override
@@ -193,6 +225,24 @@ You can override auto-injection with explicit parameters:
 ```python
 # This will use the provided database instead of the injected one
 result = abcdi.call(some_function, database=my_custom_db)
+```
+
+### Default Parameter Injection
+
+The `@injectable` decorator automatically processes default parameters with injection sentinels:
+
+```python
+@abcdi.injectable
+def send_email(
+    message: str,
+    email_service=abcdi.injected('email_service'),
+    logger=abcdi.injected()  # Uses parameter name 'logger'
+):
+    logger.info(f"Sending email: {message}")
+    return email_service.send(message)
+
+# Call without providing dependencies
+send_email("Hello World")  # email_service and logger auto-injected from defaults
 ```
 
 ### Circular Dependency Detection
@@ -216,7 +266,7 @@ dependencies = {
 - `abcdi.get_dependency(name)` - Get a dependency from global context
 - `abcdi.call(callable_obj, *args, **kwargs)` - Call function with dependency injection
 - `abcdi.bind_dependencies(callable_obj)` - Return function with dependencies bound
-- `abcdi.subcontext(dependencies, lazy=False)` - Create temporary global subcontext (context manager)
+- `abcdi.subcontext(dependencies, lazy=False, hidden_dependencies=None)` - Create temporary global subcontext (context manager)
 - `abcdi.injected(name)` - Create injection sentinel for explicit dependency injection
 - `abcdi.injectable(callable_obj)` - Decorator that processes injection sentinels in function calls
 - `abcdi.factory(Class, *args, **kwargs)` - Create factory configuration for dependency injection
@@ -226,12 +276,12 @@ dependencies = {
 
 ```python
 class Context:
-    def __init__(self, dependencies: dict[str, dict[str, Any]], lazy: bool = False, parent: Context | None = None)
+    def __init__(self, dependencies: dict[str, dict[str, Any]], lazy: bool = False, parent: Context | None = None, hidden_dependencies: set[str] | None = None)
     def get_dependency(self, name: str) -> Any
     def call(self, callable_obj, *args, **kwargs) -> Any
     def bind_dependencies(self, callable_obj) -> Callable
     def has_dependency(self, name: str) -> bool
-    def subcontext(self, dependencies: dict[str, dict[str, Any]], lazy: bool = False) -> Context
+    def subcontext(self, dependencies: dict[str, dict[str, Any]], lazy: bool = False, hidden_dependencies: set[str] | None = None) -> Context
     def injected(self, dependency_name: str | None = None) -> InjectedSentinel
     def __enter__(self) -> Context  # Context manager support
     def __exit__(self, exc_type, exc_val, exc_tb) -> None

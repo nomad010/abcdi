@@ -159,3 +159,39 @@ class TestGlobalContext(unittest.TestCase):
 
                     self.assertTrue(fn())
                     self.tearDown()
+
+    def test_subcontext_creation_upward_hidden_errors(self):
+        class DepA:
+            def __init__(self, *, b):
+                self.b = b
+
+            def __eq__(self, value):
+                return self.b == value.b
+            
+        class DepB:
+            def __init__(self, *, existing):
+                self.existing = existing
+
+            def __eq__(self, value):
+                return self.existing == value.existing
+
+        for lazy in [True, False, None]:
+            kwargs = {} if lazy is None else {'lazy': lazy}
+            for sublazy in [False, None]:
+                subkwargs = {} if sublazy is None else {'lazy': sublazy}               
+                with self.subTest(lazy=lazy, sublazy=sublazy):
+                    try:
+                        set_context(dependencies={
+                            'existing': factory(DepA, b=5),
+                        }, **kwargs)
+                        with self.assertRaises(TypeError) as exception:
+                            subcontext(dependencies={
+                                'subthing': factory(DepB),
+                            }, hidden_dependencies={'existing'}, **subkwargs)
+                        self.assertTrue(
+                            str(exception.exception).endswith(
+                                "DepB.__init__() missing 1 required keyword-only argument: 'existing'"
+                            )
+                        )
+                    finally:
+                        self.tearDown()

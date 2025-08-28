@@ -31,7 +31,13 @@ class Context:
     instances with dependency injection based on constructor parameter names.
     """
 
-    def __init__(self, dependencies: dict[str, dict[str, Any]], lazy: bool = False, parent: Context | None = None):
+    def __init__(
+            self,
+            dependencies: dict[str, dict[str, Any]],
+            lazy: bool = False,
+            parent: Context | None = None,
+            hidden_dependencies: set[str] | None = None
+    ):
         """
         Initialize the context.
 
@@ -41,6 +47,7 @@ class Context:
             parent: Optional parent context to inherit dependencies from
         """
         self.parent = parent
+        self.hidden_dependencies = hidden_dependencies or set()
         self.dependency_config: dict[str, dict[str, Any]] = {}
         self.dependency_cache: dict[str, Any] = {}  # Cache for created dependencies
         self.lazy = lazy
@@ -113,7 +120,7 @@ class Context:
             return self.dependency_cache[name]
         
         # If not found locally, check parent
-        if self.parent and self.parent.has_dependency(name):
+        if self.parent and self.parent.has_dependency(name) and name not in self.hidden_dependencies:
             return self.parent.get_dependency(name)
 
         raise KeyError(f"Dependency '{name}' is not registered in this context or parent contexts")
@@ -147,8 +154,9 @@ class Context:
                     self._create_dependency_with_cycle_detection(param_name, creating.copy())
                     constructor_args[param_name] = self.dependency_cache[param_name]
                 elif self.parent and self.parent.has_dependency(param_name):
-                    # Get from parent context
-                    constructor_args[param_name] = self.parent.get_dependency(param_name)
+                    if param_name not in self.hidden_dependencies:
+                        # Get from parent context
+                        constructor_args[param_name] = self.parent.get_dependency(param_name)
 
         # Create and cache the instance
         self.dependency_cache[name] = kls(*args, **constructor_args)
@@ -214,7 +222,7 @@ class Context:
         """
         if name in self.dependency_config:
             return True
-        if self.parent:
+        if self.parent and name not in self.hidden_dependencies:
             return self.parent.has_dependency(name)
         return False
 
@@ -224,7 +232,12 @@ class Context:
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         return None
 
-    def subcontext(self, dependencies: dict[str, dict[str, Any]], lazy: bool = False) -> Context:
+    def subcontext(
+            self,
+            dependencies: dict[str, dict[str, Any]],
+            lazy: bool = False,
+            hidden_dependencies: set[str] | None = None
+    ) -> Context:
         """
         Create a child context that inherits from this context.
         Child can override parent dependencies and add new ones.
@@ -236,4 +249,4 @@ class Context:
         Returns:
             New child context with this context as parent
         """
-        return Context(dependencies, lazy=lazy, parent=self)
+        return Context(dependencies, lazy=lazy, parent=self, hidden_dependencies=hidden_dependencies)
