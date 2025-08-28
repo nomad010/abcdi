@@ -1,7 +1,8 @@
 import unittest
 
-from abcdi import Context, injectable, factory, injected, instance, set_context
+from abcdi import Context, injectable, factory, instance, set_context
 import abcdi
+
 
 class TestInjected(unittest.TestCase):
     def test_empty_context_empty_function_succeeds(self):
